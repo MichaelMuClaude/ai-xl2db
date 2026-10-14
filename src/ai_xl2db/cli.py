@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 from ai_xl2db import __version__
-from ai_xl2db import store
+from ai_xl2db import check, store
 from ai_xl2db.reader import SUPPORTED_EXTENSIONS, read_spreadsheet
 
 
@@ -52,6 +52,28 @@ def _query(args: argparse.Namespace) -> int:
     return 0
 
 
+def _check(args: argparse.Namespace) -> int:
+    try:
+        results = check.check_database(Path(args.database))
+    except store.DatabaseError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    if not results:
+        print("no translated formulas found")
+        return 0
+    failures = 0
+    for item in results:
+        if item.status in ("mismatch", "error"):
+            failures += 1
+        cached = "" if item.cached is None else f", stored {item.cached}"
+        detail = f" ({item.message})" if item.message else ""
+        print(f"{item.table} row {item.spreadsheet_row} column {item.column}: "
+              f"{item.formula} -> {item.result or '-'}{cached}  [{item.status}]{detail}")
+    matched = sum(1 for item in results if item.status == "match")
+    print(f"{len(results)} formulas: {matched} match, {failures} mismatch or error")
+    return 1 if failures else 0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="ai-xl2db",
@@ -75,6 +97,12 @@ def main() -> None:
     query.add_argument("database", help="Path to a .db file")
     query.add_argument("sql", help="A SQL statement, for example: SELECT * FROM sales LIMIT 5")
     query.set_defaults(func=_query)
+
+    check_parser = subparsers.add_parser(
+        "check", help="Recalculate translated formulas and compare with the stored values"
+    )
+    check_parser.add_argument("database", help="Path to a .db file")
+    check_parser.set_defaults(func=_check)
 
     args = parser.parse_args()
     sys.exit(args.func(args))

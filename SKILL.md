@@ -17,9 +17,11 @@ ai-xl2db convert book.xlsx -o out/book.db --force
 ai-xl2db describe book.db                     # all tables and their columns
 ai-xl2db describe book.db --table sales_2026  # one table
 ai-xl2db query book.db "SELECT region, units FROM sales_2026 WHERE units > 10"
+ai-xl2db check book.db                        # recalculate formulas and compare with stored values
 ```
 
 - `query` is read-only. It refuses any statement that writes. Output is CSV on stdout.
+- `check` runs each translated formula and reports `match`, `mismatch`, `no cached value`, or `error`. It exits with 1 when any formula mismatches or errors.
 - Start with `describe` to see the table and column names before writing a query.
 
 ## Reading the result

@@ -13,7 +13,8 @@ This file is for AI coding agents that read, test, or change this project. The h
 3. **Read-only queries.** `query` opens the database read-only. Do not add a write path to it.
 4. **Safe identifiers.** Table and column names are generated from `naming.py`. Do not put raw user text into SQL identifiers.
 5. **Stable CLI.** Keep `convert`, `describe`, and `query`, their flags, and the exit codes (0 success, 1 failure, 2 unsupported input).
-6. **Formulas become Python scripts.** Only translate what `formula.py` supports. Anything else must be recorded with a reason in `note`, never guessed. Generated scripts must compile and must only import from `ai_xl2db.runtime`.
+6. **Stored scripts run only through `safe.run`.** Never call `exec` on a script from the database directly, and widen `safe.py`'s allow-list only with a test that shows why it is needed.
+7. **Formulas become Python scripts.** Only translate what `formula.py` supports. Anything else must be recorded with a reason in `note`, never guessed. Generated scripts must compile and must only import from `ai_xl2db.runtime`.
 
 ## Layout
 
@@ -26,6 +27,8 @@ src/ai_xl2db/
   formula.py  Excel formula -> Python expression (supported subset only)
   runtime.py  functions the generated scripts call, and load_sheet()
   store.py    writing, describing, and querying the SQLite file
+  safe.py     validates a stored script before it runs; the only place scripts are executed
+  check.py    recalculates translated formulas and compares them with stored values
 tests/        pytest suite; conftest.py builds a messy workbook for the tests
 ```
 
