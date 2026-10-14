@@ -15,7 +15,8 @@ ai-xl2db query budget.db "SELECT region, SUM(units) FROM sales_2026 GROUP BY reg
 - **One table per sheet.** Sheet names become table names, for example `Sales 2026` becomes `sales_2026`.
 - **Typed columns.** Each column is an `INTEGER`, `REAL`, or `TEXT` column in a `STRICT` table, so wrong types are rejected on write. Dates are stored as ISO text.
 - **Header detection.** Title rows and blank rows above and between data are skipped. The header is the first row with at least two filled cells.
-- **Formulas.** Each formula is recorded in a `_formulas` table with its spreadsheet row and column, so an agent can see how a value was calculated. The value is stored as it appears in the file.
+- **Formulas become Python.** Each supported Excel formula is translated into a short Python script (stored in the `_formulas` table). The script rebuilds the value from the other cells. Supported: cell references and ranges, `+ - * / ^ &`, comparisons, `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT`, `IF`, `ROUND`, `ABS`, `AND`, `OR`, and `NOT`. Anything else is recorded with the reason it is not supported.
+- **Cached values.** The result stored in the file is kept in `_formulas`, so a script's output can be checked against it.
 - **Sources.** The `_sheets` table records each sheet's original title, source file, import time, and row count.
 - **CSV input.** CSV files become one table. Numbers are detected, and values with leading zeros, such as postcodes, stay as text. UTF-8 and GB18030 are accepted.
 
@@ -29,7 +30,9 @@ Requires Python 3.10 or newer. The only dependency is `openpyxl`.
 
 ## Limits
 
-- Formulas are not calculated. If a file was saved by a program that does not store results, the value is empty. Open and save the file in a spreadsheet application first.
+- Scripts are plain Python that imports `ai_xl2db.runtime`. Read them before running them, and do not run scripts from files you do not trust.
+- Only the formula subset above is translated. Cross-sheet references, lookups, and whole-column ranges are not supported yet.
+- If a file was saved by a program that does not store results, the cached value is empty. Open and save the file in a spreadsheet application first.
 - Merged cells are read as one value in their top-left cell.
 - Excel `.xls`, `.ods`, and charts are not supported yet.
 - Header detection is a heuristic. Check the result with `describe`.

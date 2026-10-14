@@ -26,10 +26,11 @@ ai-xl2db query book.db "SELECT region, units FROM sales_2026 WHERE units > 10"
 
 - Table names are the sheet names in lower case with underscores. Column names are the header cells cleaned the same way. `column_N` means the header was blank.
 - The `_sheets` table shows each sheet's original title and source file.
-- The `_formulas` table lists formulas by table, spreadsheet row, and column. Use it to see how a value was calculated.
+- The `_formulas` table lists each formula by table, spreadsheet row, and column. `python_script` is a Python script that recomputes the value. `cached_value` is the result stored in the file. `note` says why a formula could not be translated.
 
 ## Limits
 
-- Formulas are not recalculated. If a value is empty, the source file had no stored result.
+- Only a subset of Excel functions is translated. Cross-sheet references, lookups, and whole-column ranges are not supported.
+- Scripts run with `ai_xl2db.runtime`. Read a script before running it.
 - Title rows and blank rows are skipped. If a table is missing rows, check the source file.
 - `.xls`, `.ods`, and charts are not supported.

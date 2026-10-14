@@ -16,8 +16,8 @@ class Sheet:
     title: str
     header: list[object]
     rows: list[list[object]]
-    # (row index in rows, column index) -> formula text, for cells that had a formula
-    formulas: dict[tuple[int, int], str] = field(default_factory=dict)
+    # (row index in rows, column index) -> (formula text, value stored in the file)
+    formulas: dict[tuple[int, int], tuple[str, object]] = field(default_factory=dict)
     row_numbers: list[int] = field(default_factory=list)  # spreadsheet row number of each row, 1-based
 
 
@@ -41,7 +41,7 @@ def _find_header(grid: list[list[object]]) -> int:
 
 
 def sheet_from_grid(
-    title: str, grid: list[list[object]], formulas: dict[tuple[int, int], str] | None = None
+    title: str, grid: list[list[object]], formulas: dict[tuple[int, int], tuple[str, object]] | None = None
 ) -> Sheet | None:
     """Build a Sheet from a grid of cell values (row-major, 0-based)."""
     header_index = _find_header(grid)
@@ -68,7 +68,7 @@ def sheet_from_grid(
 
     # Re-key formulas from grid positions to positions within rows.
     row_position = {source: pos for pos, source in enumerate(source_rows)}
-    kept_formulas: dict[tuple[int, int], str] = {}
+    kept_formulas: dict[tuple[int, int], tuple[str, object]] = {}
     for (grid_row, col), text in (formulas or {}).items():
         if grid_row in row_position and col < width:
             kept_formulas[(row_position[grid_row], col)] = text
@@ -122,7 +122,8 @@ def read_xlsx(path: Path) -> list[Sheet]:
         for row_index, row in enumerate(formula_ws.iter_rows(values_only=True)):
             for col_index, cell in enumerate(row):
                 if isinstance(cell, str) and cell.startswith("="):
-                    formulas[(row_index, col_index)] = cell
+                    cached = grid[row_index][col_index] if col_index < len(grid[row_index]) else None
+                    formulas[(row_index, col_index)] = (cell, cached)
         sheet = sheet_from_grid(ws.title, grid, formulas)
         if sheet:
             sheets.append(sheet)

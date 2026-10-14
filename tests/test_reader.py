@@ -18,7 +18,7 @@ def test_empty_sheet_is_not_returned(messy_xlsx):
 def test_formula_text_is_kept_by_position(messy_xlsx):
     sales = next(s for s in reader.read_xlsx(messy_xlsx) if s.title == "Sales 2026")
     # the Total row is the 4th data row (index 3); its Units cell (spreadsheet row 8) holds the SUM formula
-    assert sales.formulas[(3, 1)] == "=SUM(B4:B6)"
+    assert sales.formulas[(3, 1)][0] == "=SUM(B4:B6)"
     assert sales.row_numbers == [4, 5, 7, 8]  # blank row 6 is not counted
 
 

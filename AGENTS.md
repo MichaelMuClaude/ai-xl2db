@@ -13,7 +13,7 @@ This file is for AI coding agents that read, test, or change this project. The h
 3. **Read-only queries.** `query` opens the database read-only. Do not add a write path to it.
 4. **Safe identifiers.** Table and column names are generated from `naming.py`. Do not put raw user text into SQL identifiers.
 5. **Stable CLI.** Keep `convert`, `describe`, and `query`, their flags, and the exit codes (0 success, 1 failure, 2 unsupported input).
-6. **Formulas are recorded, not calculated.** Do not add a formula engine without a discussion.
+6. **Formulas become Python scripts.** Only translate what `formula.py` supports. Anything else must be recorded with a reason in `note`, never guessed. Generated scripts must compile and must only import from `ai_xl2db.runtime`.
 
 ## Layout
 
@@ -23,6 +23,8 @@ src/ai_xl2db/
   reader.py   .xlsx and .csv reading, header detection, formula capture
   infer.py    column types and value conversion
   naming.py   safe table and column names
+  formula.py  Excel formula -> Python expression (supported subset only)
+  runtime.py  functions the generated scripts call, and load_sheet()
   store.py    writing, describing, and querying the SQLite file
 tests/        pytest suite; conftest.py builds a messy workbook for the tests
 ```

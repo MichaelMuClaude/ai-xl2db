@@ -6,11 +6,12 @@ import sqlite3
 import sys
 from pathlib import Path
 
-from ai_xl2db import infer, naming
+from ai_xl2db import formula, infer, naming
 from ai_xl2db.reader import Sheet
 
 SHEETS_TABLE = "_sheets"
 FORMULAS_TABLE = "_formulas"
+ROWS_TABLE = "_rows"
 
 
 class DatabaseError(RuntimeError):
@@ -34,9 +35,15 @@ def write_database(db_path: Path, sheets: list[Sheet], source: str, force: bool 
         conn.execute(
             f"CREATE TABLE {FORMULAS_TABLE} ("
             "table_name TEXT NOT NULL, spreadsheet_row INTEGER NOT NULL, "
-            "column_name TEXT NOT NULL, formula TEXT NOT NULL) STRICT"
+            "column_name TEXT NOT NULL, formula TEXT NOT NULL, python_script TEXT, "
+            "cached_value TEXT, note TEXT) STRICT"
         )
-        taken = {SHEETS_TABLE, FORMULAS_TABLE}
+        conn.execute(
+            f"CREATE TABLE {ROWS_TABLE} ("
+            "table_name TEXT NOT NULL, position INTEGER NOT NULL, "
+            "spreadsheet_row INTEGER NOT NULL) STRICT"
+        )
+        taken = {SHEETS_TABLE, FORMULAS_TABLE, ROWS_TABLE}
         imported_at = datetime.datetime.now().isoformat(timespec="seconds")
 
         for sheet in sheets:
@@ -58,10 +65,29 @@ def write_database(db_path: Path, sheets: list[Sheet], source: str, force: bool 
                 f"INSERT INTO {SHEETS_TABLE} VALUES (?, ?, ?, ?, ?)",
                 (table, sheet.title, source, imported_at, len(sheet.rows)),
             )
-            for (row_index, col_index), formula in sheet.formulas.items():
+            conn.executemany(
+                f"INSERT INTO {ROWS_TABLE} VALUES (?, ?, ?)",
+                ((table, position, number) for position, number in enumerate(sheet.row_numbers, start=1)),
+            )
+            for (row_index, col_index), (text, cached) in sheet.formulas.items():
+                target = columns[col_index]
+                spreadsheet_row = sheet.row_numbers[row_index]
+                script, note = None, None
+                try:
+                    script = formula.script_for(text, columns, target, spreadsheet_row, sheet.title)
+                except formula.UnsupportedFormula as exc:
+                    note = str(exc)
                 conn.execute(
-                    f"INSERT INTO {FORMULAS_TABLE} VALUES (?, ?, ?, ?)",
-                    (table, sheet.row_numbers[row_index], columns[col_index], formula),
+                    f"INSERT INTO {FORMULAS_TABLE} VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        table,
+                        spreadsheet_row,
+                        target,
+                        text,
+                        script,
+                        None if cached is None else str(cached),
+                        note,
+                    ),
                 )
         conn.commit()
     finally:
@@ -98,11 +124,15 @@ def describe(db_path: Path, table: str | None = None) -> str:
             lines.append(f"{name}  (sheet {title!r} from {source}, {row_count} rows, imported {imported_at})")
             for _cid, col, sql_type, *_ in conn.execute(f'PRAGMA table_info("{name}")'):
                 lines.append(f"    {col}  {sql_type}")
-            formulas = conn.execute(
-                f"SELECT COUNT(*) FROM {FORMULAS_TABLE} WHERE table_name = ?", (name,)
-            ).fetchone()[0]
-            if formulas:
-                lines.append(f"    ({formulas} cells had formulas; see {FORMULAS_TABLE})")
+            total, translated = conn.execute(
+                f"SELECT COUNT(*), COUNT(python_script) FROM {FORMULAS_TABLE} WHERE table_name = ?",
+                (name,),
+            ).fetchone()
+            if total:
+                lines.append(
+                    f"    ({total} formulas: {translated} translated to Python, "
+                    f"{total - translated} not supported; see {FORMULAS_TABLE})"
+                )
             lines.append("")
         if not lines:
             lines.append("no data tables found")

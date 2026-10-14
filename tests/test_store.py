@@ -73,3 +73,50 @@ def test_chinese_text_survives_the_round_trip(messy_xlsx, tmp_path):
     with out.open("w", encoding="utf-8", newline="") as f:
         store.query(db, "SELECT note FROM \"sheet_2nd_sheet\"", out=f)
     assert "中文备注" in out.read_text(encoding="utf-8")
+
+
+def test_formulas_are_stored_as_python_scripts(messy_xlsx, tmp_path):
+    db = tmp_path / "out.db"
+    _build(messy_xlsx, db)
+    conn = sqlite3.connect(db)
+    script, note = conn.execute(
+        "SELECT python_script, note FROM _formulas WHERE table_name = 'sales_2026'"
+    ).fetchone()
+    conn.close()
+    assert note is None
+    assert "return SUM(rng(sheet, 'units', 4, 6))" in script
+
+
+def test_stored_script_gives_the_same_total_as_the_spreadsheet_formula(messy_xlsx, tmp_path):
+    from ai_xl2db import runtime
+
+    db = tmp_path / "out.db"
+    _build(messy_xlsx, db)
+    conn = sqlite3.connect(db)
+    script = conn.execute("SELECT python_script FROM _formulas WHERE table_name = 'sales_2026'").fetchone()[0]
+    conn.close()
+    namespace: dict = {}
+    exec(script, namespace)  # test-only: runs the script we generated above
+    data = runtime.load_sheet(db, "sales_2026")
+    # Excel =SUM(B4:B6) over North 10, South 20, and a blank row
+    assert namespace["compute"](data) == 30
+
+
+def test_unsupported_formula_is_recorded_with_a_note(tmp_path):
+    import openpyxl
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Lookup"
+    ws.append(["Key", "Value"])
+    ws.append(["a", 1])
+    ws.append(["b", "=VLOOKUP(A2,A1:B2,2,FALSE)"])
+    path = tmp_path / "lookup.xlsx"
+    wb.save(path)
+    db = tmp_path / "lookup.db"
+    store.write_database(db, reader.read_xlsx(path), source=path.name)
+    conn = sqlite3.connect(db)
+    script, note = conn.execute("SELECT python_script, note FROM _formulas").fetchone()
+    conn.close()
+    assert script is None
+    assert "not supported" in note
